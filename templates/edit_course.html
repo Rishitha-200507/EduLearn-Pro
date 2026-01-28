@@ -2,26 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Create Course - EduLearn Pro</title>
+    <title>Edit Course - EduLearn Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="/">EduLearn Pro</a>
-            <div class="navbar-nav ms-auto">
-                <a href="/dashboard" class="nav-link">Back to Dashboard</a>
-            </div>
-        </div>
-    </nav>
 
     <div class="container mt-5">
         <div class="row justify-content-center">
             <div class="col-md-8">
                 <div class="card shadow">
-                    <div class="card-header bg-primary text-white">
-                        <h4>Create New Course</h4>
+                    <div class="card-header bg-warning text-dark">
+                        <h4>Edit Course</h4>
                     </div>
                     <div class="card-body">
                         
@@ -29,22 +20,22 @@
                             
                             <div class="mb-3">
                                 <label class="form-label">Course Title</label>
-                                <input type="text" name="title" class="form-control" placeholder="e.g., Advanced Python Programming" required>
+                                <input type="text" name="title" class="form-control" value="{{ course['title'] }}" required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Description</label>
-                                <textarea name="description" class="form-control" rows="4" placeholder="What will students learn in this course?" required></textarea>
+                                <textarea name="description" class="form-control" rows="4" required>{{ course['description'] }}</textarea>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Course Thumbnail (Image)</label>
-                                <input type="file" name="thumbnail" class="form-control" accept="image/*">
-                                <div class="form-text">Supported formats: JPG, PNG, GIF.</div>
+                                <label class="form-label">Update Thumbnail (Optional)</label>
+                                <input type="file" name="thumbnail" class="form-control">
+                                <div class="form-text">Leave blank to keep current image.</div>
                             </div>
 
                             <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-success btn-lg">Create Course</button>
+                                <button type="submit" class="btn btn-warning">Update Course</button>
                                 <a href="/dashboard" class="btn btn-secondary">Cancel</a>
                             </div>
 

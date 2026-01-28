@@ -100,6 +100,7 @@ def logout():
     return redirect(url_for('login'))
 
 # --- NEW ROUTE: Create Course ---
+# --- NEW ROUTE: Create Course (FIXED) ---
 @app.route('/create_course', methods=['GET', 'POST'])
 def create_course():
     # Security Check: Only instructors can create courses
@@ -118,10 +119,10 @@ def create_course():
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-        # Save to Database
+        # Save to Database (NOW INCLUDES THUMBNAIL)
         conn = get_db_connection()
-        conn.execute('INSERT INTO courses (title, description, instructor_id) VALUES (?, ?, ?)',
-                     (title, description, session['user_id']))
+        conn.execute('INSERT INTO courses (title, description, instructor_id, thumbnail) VALUES (?, ?, ?, ?)',
+                     (title, description, session['user_id'], filename))
         conn.commit()
         conn.close()
 
@@ -129,6 +130,150 @@ def create_course():
         return redirect(url_for('dashboard'))
 
     return render_template('create_course.html')
+
+@app.route('/courses')
+def courses():
+    conn = get_db_connection()
+    # Fetch ALL courses to show in the catalog
+    all_courses = conn.execute('SELECT * FROM courses').fetchall()
+    conn.close()
+    return render_template('courses.html', courses=all_courses)
+
+# --- NEW ROUTE: Add Lesson ---
+@app.route('/course/<int:course_id>/add_lesson', methods=['GET', 'POST'])
+def add_lesson(course_id):
+    # Security: Ensure user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # 1. Check if the course actually belongs to this instructor
+    conn = get_db_connection()
+    course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+    
+    if not course or course['instructor_id'] != session['user_id']:
+        conn.close()
+        flash('You do not have permission to modify this course.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # 2. Handle Form Submission
+    if request.method == 'POST':
+        title = request.form['title']
+        content = request.form['content']
+        video_url = request.form['video_url']
+
+        # Save to lessons table
+        conn.execute('INSERT INTO lessons (course_id, title, content, video_url) VALUES (?, ?, ?, ?)',
+                     (course_id, title, content, video_url))
+        conn.commit()
+        conn.close()
+        
+        flash('Lesson added successfully!', 'success')
+        return redirect(url_for('dashboard'))
+
+    conn.close()
+    return render_template('add_lesson.html')
+
+# --- NEW ROUTE: View Course Details ---
+@app.route('/course/<int:course_id>')
+def course_details(course_id):
+    conn = get_db_connection()
+    
+    # 1. Get the Course Info
+    course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+    
+    # 2. Get the Lessons for this course
+    lessons = conn.execute('SELECT * FROM lessons WHERE course_id = ?', (course_id,)).fetchall()
+    
+    conn.close()
+    
+    if course is None:
+        return "Course not found", 404
+        
+    return render_template('course_details.html', course=course, lessons=lessons)
+
+# --- NEW ROUTE: Edit Course ---
+@app.route('/course/<int:course_id>/edit', methods=['GET', 'POST'])
+def edit_course(course_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+
+    # Security: Ensure only the creator can edit
+    if not course or course['instructor_id'] != session['user_id']:
+        conn.close()
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        file = request.files['thumbnail']
+
+        # If a new image is uploaded, update it. Otherwise keep the old one.
+        if file and file.filename != '':
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            conn.execute('UPDATE courses SET title = ?, description = ?, thumbnail = ? WHERE id = ?',
+                         (title, description, filename, course_id))
+        else:
+            conn.execute('UPDATE courses SET title = ?, description = ? WHERE id = ?',
+                         (title, description, course_id))
+        
+        conn.commit()
+        conn.close()
+        flash('Course updated successfully!', 'success')
+        return redirect(url_for('dashboard'))
+
+    conn.close()
+    return render_template('edit_course.html', course=course)
+# --- NEW ROUTE: Delete Course ---
+@app.route('/course/<int:course_id>/delete', methods=['POST'])
+def delete_course(course_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+
+    # Security: Ensure only the creator can delete
+    if not course or course['instructor_id'] != session['user_id']:
+        conn.close()
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # Delete the course (and its lessons)
+    conn.execute('DELETE FROM lessons WHERE course_id = ?', (course_id,)) # Delete lessons first
+    conn.execute('DELETE FROM courses WHERE id = ?', (course_id,))
+    conn.commit()
+    conn.close()
+    
+    flash('Course deleted successfully.', 'info')
+    return redirect(url_for('dashboard'))
+
+# --- NEW ROUTE: Delete Lesson ---
+@app.route('/lesson/<int:lesson_id>/delete', methods=['POST'])
+def delete_lesson(lesson_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    # Find the lesson and join with course to check instructor permission
+    lesson = conn.execute('SELECT lessons.id, courses.instructor_id, lessons.course_id FROM lessons JOIN courses ON lessons.course_id = courses.id WHERE lessons.id = ?', (lesson_id,)).fetchone()
+
+    if not lesson or lesson['instructor_id'] != session['user_id']:
+        conn.close()
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    course_id = lesson['course_id'] # Save this to redirect back correctly
+    conn.execute('DELETE FROM lessons WHERE id = ?', (lesson_id,))
+    conn.commit()
+    conn.close()
+
+    flash('Lesson deleted.', 'info')
+    return redirect(url_for('course_details', course_id=course_id))
 
 if __name__ == '__main__':
     app.run(debug=True)

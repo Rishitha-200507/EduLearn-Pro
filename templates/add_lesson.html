@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Lesson - EduLearn Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-header bg-success text-white">
+                        <h4>Add Lesson to Course</h4>
+                    </div>
+                    <div class="card-body">
+                        
+                        <form action="" method="POST">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Lesson Title</label>
+                                <input type="text" name="title" class="form-control" placeholder="e.g., Introduction to Python" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Lesson Content / Notes</label>
+                                <textarea name="content" class="form-control" rows="4" placeholder="Brief summary of what this lesson covers..."></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Video URL (YouTube/Vimeo)</label>
+                                <input type="url" name="video_url" class="form-control" placeholder="https://www.youtube.com/watch?v=..." required>
+                                <div class="form-text">Paste the full link to your video here.</div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success">Save Lesson</button>
+                                <a href="/dashboard" class="btn btn-secondary">Cancel</a>
+                            </div>
+
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
