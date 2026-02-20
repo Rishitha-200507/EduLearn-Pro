@@ -479,5 +479,40 @@ def take_quiz(lesson_id):
     conn.close()
     return render_template('take_quiz.html', lesson=lesson, quiz=quiz)
 
+# --- NEW ROUTE: Generate Certificate ---
+@app.route('/certificate/<int:course_id>')
+def certificate(course_id):
+    if 'user_id' not in session or session.get('role') != 'student':
+        flash('Please log in as a student to view certificates.', 'danger')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+    
+    # Calculate progress to verify they are actually at 100%
+    lessons = conn.execute('SELECT id FROM lessons WHERE course_id = ?', (course_id,)).fetchall()
+    total_lessons = len(lessons)
+    
+    completed = conn.execute('''
+        SELECT completed_lessons.lesson_id 
+        FROM completed_lessons 
+        JOIN lessons ON completed_lessons.lesson_id = lessons.id
+        WHERE completed_lessons.user_id = ? AND lessons.course_id = ?
+    ''', (session['user_id'], course_id)).fetchall()
+    
+    completed_count = len(set([row['lesson_id'] for row in completed]))
+    conn.close()
+
+    # Only show certificate if progress is 100%
+    if total_lessons > 0 and completed_count == total_lessons:
+        from datetime import date
+        today = date.today().strftime("%B %d, %Y")
+        return render_template('certificate.html', user=user, course=course, date=today)
+    else:
+        flash('You must complete all lessons to earn your certificate!', 'warning')
+        return redirect(url_for('course_details', course_id=course_id))
+    
+
 if __name__ == '__main__':
     app.run(debug=True)
