@@ -205,14 +205,17 @@ def course_details(course_id):
     course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
     lessons = conn.execute('SELECT * FROM lessons WHERE course_id = ?', (course_id,)).fetchall()
     
-    # NEW: Fetch completed lessons if the user is a logged-in student
     completed_lesson_ids = []
     if 'user_id' in session and session.get('role') == 'student':
         completed = conn.execute('''
-            SELECT lesson_id FROM completed_lessons WHERE user_id = ?
-        ''', (session['user_id'],)).fetchall()
-        # Convert the list of database rows into a simple list of IDs: [1, 3, 4]
-        completed_lesson_ids = [row['lesson_id'] for row in completed]
+            SELECT completed_lessons.lesson_id 
+            FROM completed_lessons 
+            JOIN lessons ON completed_lessons.lesson_id = lessons.id
+            WHERE completed_lessons.user_id = ? AND lessons.course_id = ?
+        ''', (session['user_id'], course_id)).fetchall()
+        
+        # THE FIX: We wrap the list in set() to instantly destroy any duplicate clicks!
+        completed_lesson_ids = list(set([row['lesson_id'] for row in completed]))
 
     conn.close()
 
@@ -333,6 +336,48 @@ def enroll(course_id):
     conn.close()
     return redirect(url_for('dashboard'))
 
+# --- NEW ROUTE: Add a Quiz to a Lesson ---
+@app.route('/add_quiz/<int:lesson_id>', methods=['GET', 'POST'])
+def add_quiz(lesson_id):
+    # Only allow instructors to access this page
+    if 'user_id' not in session or session.get('role') != 'instructor':
+        flash('Only instructors can add quizzes.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    conn = get_db_connection()
+    
+    # Verify the lesson exists and get the course_id so we know where to redirect later
+    lesson = conn.execute('SELECT * FROM lessons WHERE id = ?', (lesson_id,)).fetchone()
+    
+    if not lesson:
+        flash('Lesson not found!', 'danger')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    # If the instructor submits the form
+    if request.method == 'POST':
+        question = request.form['question']
+        option_a = request.form['option_a']
+        option_b = request.form['option_b']
+        option_c = request.form['option_c']
+        option_d = request.form['option_d']
+        correct_option = request.form['correct_option']
+
+        # Save the new quiz to the database
+        conn.execute('''
+            INSERT INTO quizzes (lesson_id, question, option_a, option_b, option_c, option_d, correct_option)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (lesson_id, question, option_a, option_b, option_c, option_d, correct_option))
+        
+        conn.commit()
+        conn.close()
+        
+        flash('Quiz added successfully!', 'success')
+        return redirect(url_for('course_details', course_id=lesson['course_id']))
+
+    conn.close()
+    return render_template('add_quiz.html', lesson=lesson)
+
 # --- NEW ROUTE: User Profile ---
 @app.route('/profile', methods=['GET', 'POST'])
 def profile():
@@ -398,6 +443,41 @@ def complete_lesson(lesson_id):
             
     conn.close()
     return redirect(url_for('course_details', course_id=lesson['course_id']))
+
+# --- NEW ROUTE: Student Takes a Quiz ---
+@app.route('/take_quiz/<int:lesson_id>', methods=['GET', 'POST'])
+def take_quiz(lesson_id):
+    # Only allow logged-in students
+    if 'user_id' not in session or session.get('role') != 'student':
+        flash('Only students can take quizzes.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    conn = get_db_connection()
+    lesson = conn.execute('SELECT * FROM lessons WHERE id = ?', (lesson_id,)).fetchone()
+    
+    # Fetch the quiz for this specific lesson
+    quiz = conn.execute('SELECT * FROM quizzes WHERE lesson_id = ?', (lesson_id,)).fetchone()
+
+    # If the instructor hasn't added a quiz yet, send the student back
+    if not quiz:
+        flash('No quiz available for this lesson yet!', 'info')
+        conn.close()
+        return redirect(url_for('course_details', course_id=lesson['course_id']))
+
+    # When the student clicks "Submit Answer"
+    if request.method == 'POST':
+        selected_option = request.form.get('answer')
+        
+        if selected_option == quiz['correct_option']:
+            flash('🎉 Correct! Great job!', 'success')
+        else:
+            flash(f'❌ Incorrect. The correct answer was Option {quiz["correct_option"]}. Keep learning!', 'danger')
+        
+        conn.close()
+        return redirect(url_for('course_details', course_id=lesson['course_id']))
+
+    conn.close()
+    return render_template('take_quiz.html', lesson=lesson, quiz=quiz)
 
 if __name__ == '__main__':
     app.run(debug=True)

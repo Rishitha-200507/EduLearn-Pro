@@ -142,17 +142,26 @@
                                         <a href="{{ lesson['video_url'] }}" target="_blank" class="btn btn-primary mt-3">Watch Video</a>
                                     {% endif %}
 
+                                    {% if session.get('user_id') == course['instructor_id'] %}
+                                        <hr class="mt-4">
+                                        <a href="{{ url_for('add_quiz', lesson_id=lesson['id']) }}" class="btn btn-warning fw-bold w-100">📝 Add a Quiz to this Lesson</a>
+                                    {% endif %}
+
                                     {% if session.get('role') == 'student' %}
                                         <hr class="mt-4">
-                                        {% if not is_completed %}
-                                            <form action="{{ url_for('complete_lesson', lesson_id=lesson['id']) }}" method="POST" class="text-center">
-                                                <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">Mark as Complete ✔️</button>
-                                            </form>
-                                        {% else %}
-                                            <div class="alert alert-success text-center mb-0 fw-bold">
-                                                ✅ You have completed this lesson!
-                                            </div>
-                                        {% endif %}
+                                        <div class="d-grid gap-2">
+                                            <a href="{{ url_for('take_quiz', lesson_id=lesson['id']) }}" class="btn btn-primary fw-bold">🎓 Take Quiz</a>
+                                            
+                                            {% if not is_completed %}
+                                                <form action="{{ url_for('complete_lesson', lesson_id=lesson['id']) }}" method="POST">
+                                                    <button type="submit" class="btn btn-success w-100 fw-bold">Mark as Complete ✔️</button>
+                                                </form>
+                                            {% else %}
+                                                <div class="alert alert-success text-center mb-0 fw-bold">
+                                                    ✅ You have completed this lesson!
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                     {% endif %}
 
                                 </div>
