@@ -202,19 +202,25 @@ def add_lesson(course_id):
 @app.route('/course/<int:course_id>')
 def course_details(course_id):
     conn = get_db_connection()
-    
-    # 1. Get the Course Info
     course = conn.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
-    
-    # 2. Get the Lessons for this course
     lessons = conn.execute('SELECT * FROM lessons WHERE course_id = ?', (course_id,)).fetchall()
     
+    # NEW: Fetch completed lessons if the user is a logged-in student
+    completed_lesson_ids = []
+    if 'user_id' in session and session.get('role') == 'student':
+        completed = conn.execute('''
+            SELECT lesson_id FROM completed_lessons WHERE user_id = ?
+        ''', (session['user_id'],)).fetchall()
+        # Convert the list of database rows into a simple list of IDs: [1, 3, 4]
+        completed_lesson_ids = [row['lesson_id'] for row in completed]
+
     conn.close()
-    
+
     if course is None:
-        return "Course not found", 404
-        
-    return render_template('course_details.html', course=course, lessons=lessons)
+        flash('Course not found!', 'danger')
+        return redirect(url_for('dashboard'))
+
+    return render_template('course_details.html', course=course, lessons=lessons, completed_lesson_ids=completed_lesson_ids)
 
 # --- NEW ROUTE: Edit Course ---
 @app.route('/course/<int:course_id>/edit', methods=['GET', 'POST'])
@@ -365,6 +371,33 @@ def profile():
     conn.close()
     
     return render_template('profile.html', user=user)
+
+# --- NEW ROUTE: Mark Lesson as Complete ---
+@app.route('/complete_lesson/<int:lesson_id>', methods=['POST'])
+def complete_lesson(lesson_id):
+    if 'user_id' not in session or session.get('role') != 'student':
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    conn = get_db_connection()
+    
+    # Find out which course this lesson belongs to so we can redirect the user back
+    lesson = conn.execute('SELECT course_id FROM lessons WHERE id = ?', (lesson_id,)).fetchone()
+    
+    if lesson:
+        try:
+            # Try to save the completed lesson
+            conn.execute('INSERT INTO completed_lessons (user_id, lesson_id) VALUES (?, ?)', 
+                         (user_id, lesson_id))
+            conn.commit()
+            flash('Lesson marked as complete! Great job!', 'success')
+        except sqlite3.IntegrityError:
+            # If we get an IntegrityError, it means the UNIQUE constraint caught a duplicate
+            # meaning they already completed it. We just ignore it!
+            pass
+            
+    conn.close()
+    return redirect(url_for('course_details', course_id=lesson['course_id']))
 
 if __name__ == '__main__':
     app.run(debug=True)
