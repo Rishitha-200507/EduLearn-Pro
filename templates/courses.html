@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>All Courses - EduLearn Pro</title>
+    <title>Course Catalog - EduLearn Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
@@ -11,52 +11,83 @@
         <div class="container">
             <a class="navbar-brand" href="/">EduLearn Pro</a>
             <div class="navbar-nav ms-auto">
-                {% if session.get('user_id') %}
-                    <a href="/dashboard" class="nav-link">My Dashboard</a>
-                    <a href="/logout" class="nav-link">Logout</a>
-                {% else %}
-                    <a href="/login" class="nav-link">Login</a>
-                {% endif %}
+                <a href="/dashboard" class="nav-link">Dashboard</a>
+                <a href="/logout" class="nav-link">Logout</a>
             </div>
         </div>
     </nav>
 
-    <div class="bg-white py-5 shadow-sm mb-5">
-        <div class="container text-center">
-            <h1 class="display-4 fw-bold">Explore Our Courses</h1>
-            <p class="lead text-muted">Find the perfect course to upgrade your skills.</p>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Explore All Courses</h2>
         </div>
-    </div>
 
-    <div class="container">
+        <form action="{{ url_for('courses') }}" method="GET" class="mb-5">
+            <div class="input-group shadow-sm">
+                <input type="text" name="search" class="form-control form-control-lg" 
+                       placeholder="Search by title or keyword (e.g., Python, SQL, Analytics)..." 
+                       value="{{ search_query }}">
+                <button class="btn btn-primary btn-lg px-4" type="submit">Search</button>
+                {% if search_query %}
+                    <a href="{{ url_for('courses') }}" class="btn btn-outline-secondary btn-lg">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         <div class="row">
             {% for course in courses %}
             <div class="col-md-4 mb-4">
-                <div class="card h-100 shadow-sm hover-shadow transition">
-                    
+                <div class="card h-100 shadow-sm border-0">
                     {% if course['thumbnail'] %}
-                        <img src="{{ url_for('static', filename='uploads/' + course['thumbnail']) }}" class="card-img-top" alt="{{ course['title'] }}" style="height: 200px; object-fit: cover;">
+                        <img src="{{ url_for('static', filename='uploads/' + course['thumbnail']) }}" class="card-img-top" alt="Course Image" style="height: 200px; object-fit: cover;">
                     {% else %}
-                        <img src="https://dummyimage.com/600x400/cccccc/000000&text=No+Image" class="card-img-top" style="height: 200px; object-fit: cover;">
+                        <div class="card-img-top bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px;">
+                            <span>No Image</span>
+                        </div>
                     {% endif %}
-
+                    
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title">{{ course['title'] }}</h5>
-                        <p class="card-text text-truncate">{{ course['description'] }}</p>
+                        <h5 class="card-title fw-bold">{{ course['title'] }}</h5>
+                        <p class="card-text text-truncate text-muted">{{ course['description'] }}</p>
                         
                         <div class="mt-auto">
-                            <a href="{{ url_for('course_details', course_id=course['id']) }}" class="btn btn-outline-primary w-100">View Details</a>
+                            {% if session.get('role') == 'student' %}
+                                <form action="{{ url_for('enroll', course_id=course['id']) }}" method="POST">
+                                    <button type="submit" class="btn btn-success w-100 fw-bold">Enroll Now</button>
+                                </form>
+                            {% elif session.get('role') == 'instructor' and session.get('user_id') == course['instructor_id'] %}
+                                <a href="{{ url_for('course_details', course_id=course['id']) }}" class="btn btn-primary w-100 fw-bold">Manage Course</a>
+                            {% else %}
+                                <a href="{{ url_for('course_details', course_id=course['id']) }}" class="btn btn-outline-primary w-100 fw-bold">View Details</a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
             {% else %}
-            <div class="col-12 text-center">
-                <p>No courses available yet. Check back soon!</p>
+            <div class="col-12 text-center py-5">
+                {% if search_query %}
+                    <h4 class="text-muted">No courses found matching "{{ search_query }}"</h4>
+                    <a href="/courses" class="btn btn-outline-primary mt-3">Show all courses</a>
+                {% else %}
+                    <div class="alert alert-info">No courses available right now. Check back later!</div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
     </div>
-
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

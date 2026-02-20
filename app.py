@@ -84,13 +84,23 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # If instructor, fetch their courses to show on dashboard
+    conn = get_db_connection()
     courses = []
-    if session['role'] == 'instructor':
-        conn = get_db_connection()
-        courses = conn.execute('SELECT * FROM courses WHERE instructor_id = ?', (session['user_id'],)).fetchall()
-        conn.close()
 
+    # If Instructor: Show courses they created
+    if session['role'] == 'instructor':
+        courses = conn.execute('SELECT * FROM courses WHERE instructor_id = ?', (session['user_id'],)).fetchall()
+    
+    # If Student: Show courses they are enrolled in
+    elif session['role'] == 'student':
+        # This SQL joins the courses table with the enrollments table
+        courses = conn.execute('''
+            SELECT courses.* FROM courses 
+            JOIN enrollments ON courses.id = enrollments.course_id 
+            WHERE enrollments.user_id = ?
+        ''', (session['user_id'],)).fetchall()
+
+    conn.close()
     return render_template('dashboard.html', courses=courses)
 
 @app.route('/logout')
@@ -134,10 +144,25 @@ def create_course():
 @app.route('/courses')
 def courses():
     conn = get_db_connection()
-    # Fetch ALL courses to show in the catalog
-    all_courses = conn.execute('SELECT * FROM courses').fetchall()
+    
+    # 1. Grab the search term from the URL (if there is one)
+    search_query = request.args.get('search', '')
+    
+    # 2. If the user searched for something, filter the database
+    if search_query:
+        # We use % around the search term as wildcards (e.g., %Python% matches "Advanced Python")
+        sql_query = 'SELECT * FROM courses WHERE title LIKE ? OR description LIKE ?'
+        wildcard_search = f"%{search_query}%"
+        all_courses = conn.execute(sql_query, (wildcard_search, wildcard_search)).fetchall()
+    
+    # 3. If there is no search, just show everything
+    else:
+        all_courses = conn.execute('SELECT * FROM courses').fetchall()
+        
     conn.close()
-    return render_template('courses.html', courses=all_courses)
+    
+    # We pass the search_query back to the template so the search bar doesn't clear itself
+    return render_template('courses.html', courses=all_courses, search_query=search_query)
 
 # --- NEW ROUTE: Add Lesson ---
 @app.route('/course/<int:course_id>/add_lesson', methods=['GET', 'POST'])
@@ -274,6 +299,72 @@ def delete_lesson(lesson_id):
 
     flash('Lesson deleted.', 'info')
     return redirect(url_for('course_details', course_id=course_id))
+
+# --- NEW ROUTE: Enroll in a Course ---
+@app.route('/enroll/<int:course_id>', methods=['POST'])
+def enroll(course_id):
+    # 1. Make sure the user is logged in
+    if 'user_id' not in session:
+        flash('Please log in to enroll in courses.', 'warning')
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    conn = get_db_connection()
+    
+    # 2. Check if they are already enrolled (no duplicates!)
+    existing = conn.execute('SELECT * FROM enrollments WHERE user_id = ? AND course_id = ?', 
+                            (user_id, course_id)).fetchone()
+    
+    if existing:
+        flash('You are already enrolled in this course!', 'info')
+    else:
+        # 3. Save the enrollment to the database
+        conn.execute('INSERT INTO enrollments (user_id, course_id) VALUES (?, ?)', 
+                     (user_id, course_id))
+        conn.commit()
+        flash('Successfully enrolled! The course has been added to your dashboard.', 'success')
+        
+    conn.close()
+    return redirect(url_for('dashboard'))
+
+# --- NEW ROUTE: User Profile ---
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    # Make sure the user is logged in
+    if 'user_id' not in session:
+        flash('Please log in to view your profile.', 'warning')
+        return redirect(url_for('login'))
+        
+    conn = get_db_connection()
+    user_id = session['user_id']
+    
+    # If the user submits the update form
+    if request.method == 'POST':
+        name = request.form['name']
+        file = request.files['profile_pic']
+        
+        # If they uploaded a new image
+        if file and file.filename != '':
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            
+            # Update database with new name AND new picture
+            conn.execute('UPDATE users SET name = ?, profile_pic = ? WHERE id = ?', 
+                         (name, filename, user_id))
+        else:
+            # Update database with ONLY the new name (keep old picture)
+            conn.execute('UPDATE users SET name = ? WHERE id = ?', (name, user_id))
+            
+        conn.commit()
+        session['user_name'] = name  # Update the session so the welcome message changes
+        flash('Profile updated successfully!', 'success')
+        return redirect(url_for('profile'))
+        
+    # Fetch current user data to display on the page
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    
+    return render_template('profile.html', user=user)
 
 if __name__ == '__main__':
     app.run(debug=True)
