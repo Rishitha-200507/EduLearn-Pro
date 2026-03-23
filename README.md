@@ -1,8 +1,5 @@
 # 🎓 EduLearn Pro
 
-
-**Live Demo:** [Click here to view the live website!](http://kalathotirishitha.pythonanywhere.com)
-
 **EduLearn Pro** is a fully functional, two-sided Learning Management System (LMS) built with Python and Flask. It empowers instructors to create courses and upload lessons, while providing students with an intuitive platform to discover content, enroll in courses, and track their learning progress.
 
 ---
